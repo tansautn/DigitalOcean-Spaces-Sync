@@ -46,6 +46,9 @@ There is a known issue with the built in Wordpress Image Editor, it will not upl
 
 == Changelog ==
 
+= 2.1.1 =
+* Add sync existing files to Digital Ocean Spaces (ajax & PHP-CLI)
+
 = 2.1.0 =
 * Fix empty upload path cause create server real path in DO Space (https://github.com/keeross/DigitalOcean-Spaces-Sync/pull/15)
 * Fix PHP Deprecated warning (https://github.com/keeross/DigitalOcean-Spaces-Sync/pull/20)

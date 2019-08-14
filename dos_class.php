@@ -14,6 +14,9 @@ class DOS {
   private        $upload_url_path;
   private        $upload_path;
 
+  private $imgInfo;
+  private $_jsonIdsFile = 'dos-sync-ids.json';
+  private $_dataFileName = 'dos-data.json';
 	/**
 	 *
 	 * @return DOS
@@ -47,6 +50,10 @@ class DOS {
     $this->filter              = empty($filter) ? get_option('dos_filter') : $filter;
     $this->upload_url_path     = empty($upload_url_path) ? get_option('upload_url_path') : $upload_url_path;
     $this->upload_path         = empty($upload_path) ? get_option('upload_path') : $upload_path;
+        $dir = wp_upload_dir()['basedir'] . DIRECTORY_SEPARATOR . 'dos';
+        if(!is_dir($dir)){
+            mkdir($dir,0777);
+        }
 	}
 
   // SETUP
@@ -55,6 +62,41 @@ class DOS {
     $this->register_actions();
     $this->register_filters();
 
+  }
+
+    public function sync($attId)
+    {
+        $meta = wp_get_attachment_metadata($attId);
+        wp_update_attachment_metadata($attId,$meta);
+        $this->pushIdToJson($attId);
+        return $meta;
+  }
+    public function syncFileAjax()
+    {
+        if($_SERVER['REQUEST_METHOD'] === 'POST'){
+            $attId = $_POST['id'] ?? null;
+            if(!$attId){
+                echo json_encode(['ok' => false,'error' => ['code' => -10,'message' => 'Invalid attatchment id']]);
+                exit();
+            }
+            if($_POST['skipExists']){
+                $meta = wp_get_attachment_metadata($attId);
+                if (isset($meta['file'])) {
+                    $filesystem = DOS_Filesystem::get_instance($this->key, $this->secret, $this->container, $this->endpoint);
+                    $cdnPath = rtrim($this->storage_path,'/') . '/' . ltrim($meta['file'],'/');
+                    if($filesystem->has( $cdnPath )){
+                        echo json_encode(['ok' => true,'error' => null,'message' => 'File Already exists on CDN','meta' => $meta]);
+                        exit();
+                    }
+                }
+            }
+            $meta = $this->sync($attId);
+            echo json_encode(['ok' => true,'error' => null,'message' => 'Sync success','meta' => $meta]);
+            exit();
+//            var_dump();
+        }
+        echo json_encode(['ok' => false,'error' => ['code' => -10,'message' => 'Method not allowed. Must sent as post request.']]);
+        exit();
   }
 
   // REGISTRATIONS
@@ -66,6 +108,7 @@ class DOS {
     add_action('admin_enqueue_scripts', array($this, 'register_styles' ) );
 
     add_action('wp_ajax_dos_test_connection', array($this, 'test_connection' ) );
+    add_action('wp_ajax_dos_sync_file', array($this, 'syncFileAjax' ) );
 
     add_action('add_attachment', array($this, 'action_add_attachment' ), 10, 1);
     add_action('delete_attachment', array($this, 'action_delete_attachment' ), 10, 1);
@@ -80,16 +123,51 @@ class DOS {
     
   }
 
+    /**
+     * @param bool $storage_file_only
+     * @return DOS
+     */
+    public function setStorageFileOnly($storage_file_only)
+    {
+        $this->storage_file_only = $storage_file_only;
+
+        return $this;
+    }
+
+    private function register()
+    {
+
+  }
+
   public function register_scripts () {
 
-    wp_enqueue_script('dos-core-js', plugin_dir_url( __FILE__ ) . '/assets/scripts/core.js', array('jquery'), '1.4.0', true);
+      $imgInfo = $this->getImgInfo();
+      $totalImg = 0;
+      foreach ($imgInfo as $value) {
+          $totalImg += $value;
+      }
+      $scriptInfo = [
+          'perPage' => 25,
+          'curPage' => 1,
+          'idList' => $this->getIdJson(),
+          'totalImg' => $totalImg,
+          'imgInfo' => $imgInfo,
+          'processing' => [],
+          'done' => $this->getIdJson(),
+          'apiUrl' => site_url('wp-json/wp/v2/media?per_page=25&_fields=id&exclude_site_icons=1&orderby=id&order=asc&page='),
+          'syncedImg' => 0,
+          'editUrl' => site_url('wp-admin/post.php?action=edit&amp;post='),
+      ];
+    wp_enqueue_script('dos-core-js', plugin_dir_url( __FILE__ ) . 'assets/scripts/core.js', array('jquery'), '1.4.0', true);
+      wp_localize_script( 'dos-core-js', 'dosSyncData', $scriptInfo );
 
   }
 
   public function register_styles () {
 
-    wp_enqueue_style('dos-flexboxgrid', plugin_dir_url( __FILE__ ) . '/assets/styles/flexboxgrid.min.css' );
-    wp_enqueue_style('dos-core-css', plugin_dir_url( __FILE__ ) . '/assets/styles/core.css' );
+    wp_enqueue_style('dos-flexboxgrid', plugin_dir_url( __FILE__ ) . 'assets/styles/flexboxgrid.min.css' );
+    wp_enqueue_style('dos-progressbar', plugin_dir_url( __FILE__ ) . 'assets/styles/progressbar.css' );
+    wp_enqueue_style('dos-core-css', plugin_dir_url( __FILE__ ) . 'assets/styles/core.css' );
 
   }
 
@@ -122,7 +200,104 @@ class DOS {
       'setting_page.php',
       array($this, 'register_setting_page')
     );
+      $this->menu_id = add_management_page(
+          _x( 'Sync Existing Files to Digital Ocean Spaces', 'admin page title', 'dos-sync-existing' ),
+          _x( 'Sync Existing Files to Digital Ocean Spaces', 'admin menu entry title', 'dos-sync-existing' ),
+          'manage_options',
+          'dos-sync-existing',
+          array( $this, 'regenerate_interface' )
+      );
+  }
+    public function getIdJson() {
+        return $this->readJson($this->_jsonIdsFile) ?: [];
+    }
+    public function pushIdToJson($id) {
+        $data = $this->readJson($this->_jsonIdsFile) ?: [];
+        $data[] = (int) $id;
+        $this->writeJson($this->_jsonIdsFile,$data);
+    }
 
+    public function getImgInfo()
+    {
+        if(!$this->imgInfo){
+            $this->imgInfo = get_object_vars(wp_count_attachments());
+        }
+        return $this->imgInfo;
+    }
+
+    private function readJson($file) {
+        $dir = wp_upload_dir()['basedir'] . DIRECTORY_SEPARATOR . 'dos';
+        $filePath = $dir . DIRECTORY_SEPARATOR . $file;
+        $content = @file_get_contents($filePath);
+        return json_decode($content,true);
+    }
+
+    private function writeJson($file, $data) {
+        $dir = wp_upload_dir()['basedir'] . DIRECTORY_SEPARATOR . 'dos';
+        $filePath = $dir . DIRECTORY_SEPARATOR . $file;
+        $content = json_encode($data);
+        if(!@file_exists($filePath)){
+            @touch($filePath);
+        }
+        file_put_contents($filePath,$content);
+    }
+    /**
+     * The main Regenerate Thumbnails interface, as displayed at Tools → Regenerate Thumbnails.
+     */
+    public function regenerate_interface() {
+        global $wp_version;
+        $imgInfo = $this->getImgInfo();
+        $totalImg = 0;
+        foreach ($imgInfo as $value) {
+            $totalImg += $value;
+        }
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html_x( 'Regenerate Thumbnails', 'admin page title', 'dos-dync' ) . '</h1>';
+
+        if ( version_compare( $wp_version, '4.7', '<' ) ) {
+            echo '<p>' . sprintf(
+                    __( 'This plugin requires WordPress 4.7 or newer. You are on version %1$s. Please <a href="%2$s">upgrade</a>.', 'dos-dync' ),
+                    esc_html( $wp_version ),
+                    esc_url( admin_url( 'update-core.php' ) )
+                ) . '</p>';
+        } else {
+
+            ?>
+
+            <div id="regenerate-thumbnails-app">
+				<div class="notice notice-error hide-if-js">
+					<p><strong><?php esc_html_e( 'This tool requires that JavaScript be enabled to work.', 'regenerate-thumbnails' ); ?></strong></p>
+				</div>
+                <div id="dos-config">
+                    <div>
+                        <p><label><input type="checkbox" id="dos-regenopt-onlymissing" checked>
+                                Skip sync existing file on CDN (faster).
+                            </label></p>
+                        <div><p><button class="button button-primary button-hero" id="dos-sync-btn">
+                                    Sync All <?php echo $totalImg ?> Attachments
+                                </button></p> </div> </div>
+                </div>
+                <div id="dos-run" style="display: none;">
+                    <div data-v-44284f52="">
+                        <h3 id="dos-synced-count">0 / 0</h3>
+                        <div data-v-44284f52="" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="ui-progressbar ui-widget ui-widget-content ui-corner-all"><div class="ui-progressbar-value ui-widget-header ui-corner-left"></div></div>
+                        <p data-v-44284f52="">
+                            <button data-v-44284f52="" class="button button-secondary button-large" id="dos-pause-btn">
+                                Pause
+                            </button>
+                        </p> <!---->
+                        <h2 data-v-44284f52="" class="title">Regeneration Log</h2>
+                        <div data-v-44284f52="">
+                            <ol data-v-44284f52="" start="1" id="dos-sync-log"></ol></div></div>
+                </div>
+				<!--<router-view><p class="hide-if-no-js"><?php /*esc_html_e( 'Loading…', 'dos-dync' ); */?></p></router-view>-->
+			</div>
+
+            <?php
+
+        } // version_compare()
+
+        echo '</div>';
   }
 
   // FILTERS
@@ -163,9 +338,11 @@ class DOS {
 
     // process paths
     foreach ($paths as $filepath) {
+        $this->file_upload($filepath);
+/*        if(@file_exists($filepath)){
 
+        }*/
       // upload file
-      $this->file_upload($filepath, 0, true);
 
     }
 
