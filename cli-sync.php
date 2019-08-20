@@ -50,7 +50,7 @@ if($acquired){
             echo sprintf('Syncing attachment id : %d%s',$att->id,$lb);
             $metadata = $dosInstance->sync($att->id);
             echo sprintf('Sync result : %s at %s%s',$metadata['image_meta']['isSynced'] ? 'OK' : 'ERROR',$metadata['image_meta']['lastSync'],$lb);
-            if ($isDelete) {
+            if ($isDelete && $metadata['image_meta']['isSynced']) {
                 $paths = [];
                 /* collect file paths */
                 // collect original file path
