@@ -31,6 +31,21 @@ jQuery( function () {
         apiUrl : '',
         editUrl : '',
     };
+    let asyncInput = jQuery('input[name=dos_async_upload]');
+    function onAsyncUploadChanged() {
+        let txt = jQuery('#upload_url_path');
+//        let hidden = jQuery('#upload_url_path_hidden');
+        let fallback = jQuery('#dos_upload_url_path_fallback');
+        if(asyncInput.prop('checked')){
+            txt.prop('required',true);
+            fallback.prop('required',true);
+//            hidden.prop('disabled',false).val('');
+        }else{
+            txt.prop('required',false);
+            fallback.prop('required',false);
+//            hidden.prop('disabled',true);
+        }
+    }
     function registerUnload() {
         if(dosSyncData.isRuning){
             window.onbeforeunload = function() {
@@ -131,6 +146,8 @@ jQuery( function () {
         dosSyncData.isPaused = !dosSyncData.isPaused;
         jQuery('#dos-pause-btn').text(dosSyncData.isPaused ? 'Resume' : 'Pause');
     });
+    asyncInput.on('change',onAsyncUploadChanged);
+    onAsyncUploadChanged();
   // check connection button
   dos_test_connection.on( 'click', function () {
 

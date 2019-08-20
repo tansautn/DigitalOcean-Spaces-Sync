@@ -140,6 +140,7 @@
           </div>
 
           <div class="col-xs-12 col-sm-12 col-md-12 col-lg-10">
+            <input type="hidden" id="upload_url_path_hidden" name="upload_url_path" value="" disabled />
             <input id="upload_url_path" name="upload_url_path" type="text" class="regular-text code"
                    value="<?php echo esc_attr( defined( 'UPLOAD_URL_PATH' ) ? UPLOAD_URL_PATH : get_option('upload_url_path')  ); ?>" 
                    <?php echo ( defined( 'UPLOAD_URL_PATH' ) ? 'disabled' : '' ); ?>/>
@@ -149,6 +150,28 @@
               <?php _e('or full URL path, if are kept both in cloud and on the server.','dos'); ?>
               <code>(http://example.com/wp-content/uploads)</code>.</p>
               <?php _e('In that case duplicates are created. If you change one, you change and the other,','dos'); ?>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="row larger">
+
+          <div class="col-xs-12 col-sm-12 col-md-12 col-lg-2">
+            <label for="dos_upload_url_path_fallback">
+              <?php _e('Fallback URL', 'dos'); ?>:
+            </label>
+          </div>
+
+          <div class="col-xs-12 col-sm-12 col-md-12 col-lg-10">
+            <input id="dos_upload_url_path_fallback" name="dos_upload_url_path_fallback" type="text" class="regular-text code"
+                   value="<?php echo esc_attr( defined( 'DOS_UPLOAD_URL_PATH_FALLBACK' ) ? DOS_UPLOAD_URL_PATH_FALLBACK : get_option('dos_upload_url_path_fallback')  ); ?>"
+                <?php echo ( defined( 'DOS_UPLOAD_URL_PATH_FALLBACK' ) ? 'disabled' : '' ); ?>/>
+            <div class="dos__description">
+              <?php _e('This option is only used when asyncupload is turned on', 'dos'); ?>
+              <?php _e('Unsynchronized files will be fallback to this url.','dos'); ?>
+              <?php _e('Usually it is the url of the local server','dos'); ?>
+              <code>(http://example.com/wp-content/uploads)</code>.</p>
             </div>
           </div>
 
@@ -230,8 +253,22 @@
       <div class="row">
         
         <div class="col-xs-1 col-sm-1 col-md-1 col-lg-1" style="width: 50px;">
+          <input id="asyncupload" type="checkbox" name="dos_async_upload"
+                 value="1" <?php echo checked( defined( 'DOS_ASYNC_UPLOAD' ) ? DOS_ASYNC_UPLOAD : get_option('dos_async_upload'), 1 ); ?>"
+                 <?php echo ( defined( 'DOS_ASYNC_UPLOAD' ) ? 'disabled' : '' ); ?> />
+        </div>
+
+        <div class="col-xs-11 col-sm-11 col-md-11 col-lg-11">
+          <?php _e('Asynchronous upload', 'dos'); ?>
+          <?php _e('The file will be sync later by the scheduled (cronjob).', 'dos'); ?>
+        </div>
+
+      </div>
+      <div class="row">
+
+        <div class="col-xs-1 col-sm-1 col-md-1 col-lg-1" style="width: 50px;">
           <input id="onlystorage" type="checkbox" name="dos_storage_file_only"
-                 value="1" <?php echo checked( defined( 'DOS_STORAGE_FILE_ONLY' ) ? DOS_STORAGE_FILE_ONLY : get_option('dos_storage_file_only'), 1 ); ?>" 
+                 value="1" <?php echo checked( defined( 'DOS_STORAGE_FILE_ONLY' ) ? DOS_STORAGE_FILE_ONLY : get_option('dos_storage_file_only'), 1 ); ?>"
                  <?php echo ( defined( 'DOS_STORAGE_FILE_ONLY' ) ? 'disabled' : '' ); ?> />
         </div>
 
